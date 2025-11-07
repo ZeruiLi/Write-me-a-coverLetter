@@ -1,0 +1,9 @@
+Write a professional cover letter.
+Language: {{language}}
+Style: {{style}}
+Paragraphs <= {{paragraphs_max}}, target words {{target_words}}.
+Must include keywords: {{include}}. Avoid keywords: {{avoid}}.
+Output semantic HTML only (<header>,<main>,<section>,<p>,<footer>), no Markdown.
+Resume snapshot: {{resume}}
+Job: {{job}}
+

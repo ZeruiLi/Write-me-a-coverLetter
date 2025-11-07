@@ -1,0 +1,7 @@
+Question: {{question}}
+Language: {{language}}
+Constraints: single paragraph, <=200 characters, no Markdown or HTML.
+Resume snapshot: {{resume}}
+Job: {{job}}
+Answer succinctly.
+

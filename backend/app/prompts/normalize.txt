@@ -1,0 +1,5 @@
+Normalize the following job description to JSON with keys: role, responsibilities[], requirements[], keywords[], language('zh'|'en').
+Text:
+{{text}}
+Output JSON only.
+
