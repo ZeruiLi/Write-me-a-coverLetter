@@ -1,0 +1,13 @@
+{
+  "library": "Library",
+  "compose": "Compose",
+  "questions": "Questions",
+  "upload_resume": "Upload Resume",
+  "select_resume": "Select a resume",
+  "job_description": "Job Description",
+  "generate_letter": "Generate Letter",
+  "export_pdf": "Export PDF",
+  "question": "Question",
+  "generate": "Generate"
+}
+

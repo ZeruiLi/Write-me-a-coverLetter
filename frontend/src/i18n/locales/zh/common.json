@@ -1,0 +1,13 @@
+{
+  "library": "简历库",
+  "compose": "撰写",
+  "questions": "问答",
+  "upload_resume": "上传简历",
+  "select_resume": "选择简历",
+  "job_description": "职位描述",
+  "generate_letter": "生成封面信",
+  "export_pdf": "导出 PDF",
+  "question": "问题",
+  "generate": "生成"
+}
+

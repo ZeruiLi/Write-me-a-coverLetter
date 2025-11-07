@@ -1,0 +1,12 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@media print {
+  .a4 {
+    width: 210mm;
+    min-height: 297mm;
+    padding: 20mm;
+  }
+}
+
