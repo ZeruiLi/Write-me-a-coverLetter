@@ -1,0 +1,17 @@
+{
+  "basics": {"name":"Jane Doe","email":"jane@example.com","phone":"+1 555-123","location":"SF"},
+  "hard_skills": ["Python","FastAPI","PostgreSQL"],
+  "experiences": [
+    {
+      "title": "Senior Engineer",
+      "company": "Acme",
+      "period": {"start": "2022-01", "end": "2024-05"},
+      "bullets": [
+        {"id":"b1","action":"Led migration","outcome":"reduced latency","metric":"-40%","evidence": {"start": 120, "end": 180, "anchor_sha256": "..."}}
+      ]
+    }
+  ],
+  "education": [{"school":"Some Univ","degree":"BS CS","graduation":"2019"}],
+  "language": "en",
+  "meta": {"source":{"doc_version_id":1,"file_sha256":"...","mime":"application/pdf"},"extract_version":"v1","prompt_version":"v1","model":"gemini-1.5-pro"}
+}

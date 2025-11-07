@@ -1,0 +1,11 @@
+{
+  "role": "Backend Engineer",
+  "company": "Acme",
+  "must_have_skills": ["Python","SQL"],
+  "nice_to_have_skills": ["Kubernetes"],
+  "responsibilities": ["Build APIs","Maintain services"],
+  "challenges": ["Reduce latency","Improve reliability"],
+  "language": "en",
+  "jd_unique_terms": ["Acme Cloud","Photon Service"],
+  "meta": {"source":{"doc_version_id":2,"file_sha256":"...","mime":"application/pdf"},"extract_version":"v1","prompt_version":"v1","model":"gemini-1.5-pro"}
+}

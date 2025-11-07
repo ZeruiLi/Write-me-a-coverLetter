@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "filecap-service"
+version = "0.1.0"
+description = "File-capable LLM extraction sidecar"
+authors = ["Zerui Li <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<4.0"
+fastapi = "^0.115.0"
+uvicorn = {version = "^0.30.0", extras=["standard"]}
+pydantic = "^2.8.2"
+google-generativeai = "^0.7.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+

@@ -42,6 +42,34 @@ class ResumeObjectV1(BaseModel):
     language: Lang
     meta: dict
 
+# Raw extraction (LLM output with quotes, will be post-processed to pointers)
+class EvidenceRaw(BaseModel):
+    quote: str
+
+
+class BulletRaw(BaseModel):
+    id: str
+    action: str
+    outcome: str
+    metric: str
+    evidence: EvidenceRaw
+
+
+class ExperienceRaw(BaseModel):
+    title: str
+    company: str
+    period: dict
+    bullets: List[BulletRaw] = Field(default_factory=list)
+
+
+class ResumeExtractRaw(BaseModel):
+    basics: dict
+    hard_skills: List[str] = Field(default_factory=list)
+    experiences: List[ExperienceRaw] = Field(default_factory=list)
+    education: List[EducationItem] = Field(default_factory=list)
+    language: Lang
+    meta: dict
+
 
 class JDObjectV1(BaseModel):
     role: str
@@ -78,4 +106,3 @@ class AnchorTextV1(BaseModel):
     anchor_sha256: str
     text: str
     doc_version_id: int
-

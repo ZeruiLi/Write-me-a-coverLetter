@@ -1,20 +1,21 @@
 import { useState } from 'react'
-import { normalizeJob, generateLetter, exportPDFByGenId, exportPDFByHtml } from '../api/client'
+import { normalizeJob, generateLetter, exportPDFByGenId, exportPDFByHtml, extractJdFromText, generateLetter2 } from '../api/client'
 import { useAppStore } from '../store'
 import { StyleSelector } from '../components/StyleSelector'
 import { A4Preview } from '../components/A4Preview'
 
 export function Compose(){
-  const { resumeId, jdText, setJdText, params, setParams, letterHtml, setLetter, genId } = useAppStore()
+  const { resumeObjId, jdText, setJdText, params, setParams, letterHtml, setLetter, genId } = useAppStore()
   const [busy, setBusy] = useState(false)
 
   const onGenerate = async ()=>{
-    if(!resumeId) return alert('Please select or upload a resume first')
+    if(!resumeObjId) return alert('Please select or upload a resume first')
     setBusy(true)
     try{
-      const jd = await normalizeJob(jdText)
-      const { genId, content } = await generateLetter({ resumeId, job: jd, ...params })
-      setLetter(content, genId)
+      // v1.1 flow: extract JD then letter2
+      const { jdObjId } = await extractJdFromText(jdText)
+      const { genId, html } = await generateLetter2(resumeObjId, jdObjId, params.style, params.language)
+      setLetter(html, genId)
     } catch(err:any){ alert(err.message || 'Failed') } finally{ setBusy(false) }
   }
 
@@ -58,4 +59,3 @@ function downloadBlob(blob: Blob, filename: string){
   a.click()
   setTimeout(()=>URL.revokeObjectURL(url), 1000)
 }
-

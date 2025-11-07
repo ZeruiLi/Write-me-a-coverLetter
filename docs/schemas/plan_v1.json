@@ -1,0 +1,9 @@
+{
+  "opening": {"company":"Acme","role":"Backend Engineer","hook":"I have shipped low-latency APIs..."},
+  "why_me": [
+    {"evidence_id":"b1","line":"Led migration → reduced latency (-40%)"}
+  ],
+  "why_you": {"focus_points":["Reduce latency","Improve reliability"]},
+  "cta": "I'd be glad to walk through relevant projects.",
+  "language": "en"
+}

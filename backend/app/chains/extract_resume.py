@@ -6,7 +6,7 @@ from typing import Tuple
 from pydantic import ValidationError
 
 from ..providers.filecapable import FileCapableLLM, ProviderNotFileCapable
-from ..schemas.extract import ResumeObjectV1
+from ..schemas.extract import ResumeExtractRaw
 
 
 RESUME_EXTRACT_PROMPT_V1 = (
@@ -17,13 +17,12 @@ RESUME_EXTRACT_PROMPT_V1 = (
 )
 
 
-def extract_resume_with_files(llm: FileCapableLLM, file_token: str) -> Tuple[ResumeObjectV1, dict]:
+def extract_resume_with_files(llm: FileCapableLLM, file_token: str) -> Tuple[ResumeExtractRaw, dict]:
     prompt = RESUME_EXTRACT_PROMPT_V1
     text = llm.generate(prompt, files=[file_token])
     try:
         data = json.loads(text)
-        obj = ResumeObjectV1(**data)
+        obj = ResumeExtractRaw(**data)
     except (json.JSONDecodeError, ValidationError) as e:
         raise ValueError(f"schema_invalid: {e}")
     return obj, {"prompt": prompt}
-

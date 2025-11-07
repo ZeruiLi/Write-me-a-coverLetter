@@ -1,18 +1,23 @@
 import { useRef, useState } from 'react'
-import { uploadResume } from '../api/client'
+import { extractResumeFile } from '../api/client'
 import { useAppStore } from '../store'
 
 export function UploadDropzone(){
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const setResumeId = useAppStore(s=>s.setResumeId)
+  const setResumeObjId = useAppStore(s=>s.setResumeObjId)
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>)=>{
     const f = e.target.files?.[0]
     if(!f) return
     setBusy(true)
     try{
-      const res = await uploadResume(f)
-      setResumeId(res.resumeId)
+      try {
+        const res = await extractResumeFile(f)
+        setResumeObjId(res.resumeObjId)
+      } catch (e:any) {
+        alert(e.message || 'Resume extraction failed')
+      }
     } finally { setBusy(false) }
   }
   return (
@@ -23,4 +28,3 @@ export function UploadDropzone(){
     </div>
   )
 }
-
