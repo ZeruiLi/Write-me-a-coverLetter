@@ -22,7 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(resumes.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(generate.router, prefix="/api")
-    app.include_router(exports.router, prefix="/" )
+    app.include_router(exports.router)
     app.include_router(audit.router, prefix="/api")
 
     @app.get("/healthz")
@@ -38,4 +38,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

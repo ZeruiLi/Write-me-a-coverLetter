@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,6 +21,7 @@ class Settings:
     storage_audit: Path = Path("storage/audit")
 
 
+load_dotenv()
 settings = Settings()
 
 
@@ -27,4 +29,3 @@ def ensure_storage_dirs() -> None:
     settings.storage_resumes.mkdir(parents=True, exist_ok=True)
     settings.storage_exports.mkdir(parents=True, exist_ok=True)
     settings.storage_audit.mkdir(parents=True, exist_ok=True)
-

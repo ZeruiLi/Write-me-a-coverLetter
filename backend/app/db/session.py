@@ -1,10 +1,8 @@
-from contextlib import contextmanager
-from typing import Iterator
+from typing import Generator
 from .engine import SessionLocal
 
 
-@contextmanager
-def get_session() -> Iterator:
+def get_session() -> Generator:
     db = SessionLocal()
     try:
         yield db
@@ -14,4 +12,3 @@ def get_session() -> Iterator:
         raise
     finally:
         db.close()
-
