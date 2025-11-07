@@ -51,3 +51,80 @@ class Generation(Base):
     output_summary: Mapped[str] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+
+# v1.1 LLM-first extraction tables
+class Document(Base):
+    __tablename__ = "documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String)  # 'resume' | 'jd'
+
+
+class DocumentVersion(Base):
+    __tablename__ = "document_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"))
+    file_sha256: Mapped[str] = mapped_column(String)
+    mime: Mapped[str] = mapped_column(String)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AnchorText(Base):
+    __tablename__ = "anchor_texts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    doc_version_id: Mapped[int] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
+    anchor_sha256: Mapped[str] = mapped_column(String, unique=True)
+    text: Mapped[str] = mapped_column()
+
+
+class ExtractionRun(Base):
+    __tablename__ = "extraction_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    doc_version_id: Mapped[int] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # 'resume' | 'jd'
+    prompt_version: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)
+    params_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ResumeObject(Base):
+    __tablename__ = "resume_objects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    doc_version_id: Mapped[int] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
+    extract_version: Mapped[str] = mapped_column(String)
+    prompt_version: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)
+    json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class JDObject(Base):
+    __tablename__ = "jd_objects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    doc_version_id: Mapped[int] = mapped_column(ForeignKey("document_versions.id", ondelete="CASCADE"))
+    extract_version: Mapped[str] = mapped_column(String)
+    prompt_version: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)
+    json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GenerationRun(Base):
+    __tablename__ = "generation_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    resume_obj_id: Mapped[int] = mapped_column(ForeignKey("resume_objects.id", ondelete="SET NULL"), nullable=True)
+    jd_obj_id: Mapped[int] = mapped_column(ForeignKey("jd_objects.id", ondelete="SET NULL"), nullable=True)
+    plan_json_sha: Mapped[str] = mapped_column(String)
+    html_sha: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)
+    params_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    timings_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

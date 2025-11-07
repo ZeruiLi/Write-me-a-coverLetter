@@ -12,7 +12,8 @@
 ## v1.0 全局规范与前置
 
 工具链与环境
-- Node v20（.nvmrc），pnpm；Python 3.11（.python-version），Poetry
+- Node v18+（推荐 v20；.nvmrc 提供建议版本），包管理优先 pnpm（若无 pnpm，可使用 npm）
+- Python 3.11（.python-version），Poetry
 - Playwright（Chromium 无头浏览器）；Tesseract OCR（含中文/英文语言包）
 - 操作系统：macOS/Windows/Linux 任一；需具备本地文件读写权限
 
@@ -282,10 +283,14 @@ UI 规范与流程
 
 构建与运行
 - .env.example：`VITE_API_BASE_URL=http://localhost:8000`
-- 典型命令：
+- 使用 pnpm（优先）
   - `pnpm install`
-  - `pnpm dev`（本地开发，端口 5173，代理到后端可选）
+  - `pnpm dev`（本地开发，端口 5173）
   - `pnpm build && pnpm preview`
+- 若本机无 pnpm，可用 npm 作为临时替代
+  - `npm install`（会生成 package-lock.json）
+  - `npm run dev` / `npm run build` / `npm run preview`
+  - 或使用 corepack：`corepack enable` 后 `pnpm`
 
 验收标准（v1.0 前端）
 - 能完成“上传 → 列表 → 选择 → 生成 letter → 预览 → 导出 PDF”的最短闭环
@@ -389,3 +394,193 @@ Wire to backend endpoints described in DEV_PLAN; export PDF using html if genId-
 
 ## v2.0 / v3.0 提示
 - 保持占位，待 v1.0 完成后再细化。
+
+---
+
+## LLM-First Extraction Workflow（A/B/C/D）— v1.1 规范补充
+
+目标与边界（依据最新决策）
+- 模型必须原生支持“文件上传与识别”；如不支持，直接报错（不做降级/折衷）。
+- 证据指针使用“全局字符区间”（start,end）基于规范化锚文本定位；前端高亮非 v1.0 强制。
+- 抽取范围限定：硬技能、项目/经验中的可度量成果（AOM：Action/Outcome/Metric）、教育背景。
+- 亮点选择全自动（≤3 条），本轮不提供人工 override。
+- 抽取失败（JSON 不合规/缺关键字段）即 422 报错，让用户修正后重试。
+- 审计与版本化：存“文档版本”与“抽取 prompt/提示版本”，并行共存可检索。
+
+数据契约（C 点存储对象）
+- ResumeObjectV1（JSON）
+  - basics: { name, email, phone, location }
+  - hard_skills: string[]
+  - experiences: Array<{ title, company, period: { start, end }, bullets: Array<{ id:string, action, outcome, metric, evidence: { start:int, end:int, anchor_sha256:string } }> }>
+  - education: Array<{ school, degree, graduation }>
+  - language: 'zh'|'en'
+  - meta: { source: { doc_version_id, file_sha256, mime }, extract_version: string, prompt_version: string, model: string }
+- JDObjectV1（JSON）
+  - role: string
+  - company: string
+  - must_have_skills: string[]
+  - nice_to_have_skills: string[]
+  - responsibilities: string[]
+  - challenges: string[]
+  - language: 'zh'|'en'
+  - jd_unique_terms: string[]
+  - meta: 同上
+- AnchorTextV1（规范化锚文本，仅用于指针定位）
+  - anchor_sha256: string
+  - text: string  // 规范化后的纯文本
+  - doc_version_id: number
+- CoverPlanV1（规划）
+  - opening: { company, role, hook: string }
+  - why_me: Array<{ evidence_id: string, line: string }>  // ≤3，引用 ResumeObjectV1.bullets[*].id
+  - why_you: { focus_points: string[] }
+  - cta: string
+  - language: 'zh'|'en'
+- Audit 元数据（全链路）
+  - 每步：input_hash、prompt_version、model/params、timings、tokens、outputs_sha、status
+
+后端模块与文件
+- providers/filecapable.py
+  - FileCapableLLM 接口：upload(file)->file_token；generate(prompt, files:[token], params)->text/json
+  - GeminiFileCapable 实现；若当前模型不支持文件 → raise 501 provider_no_file_support
+- chains/extract_resume.py（LCEL + PydanticOutputParser）
+  - 入：file_token，language_hint，prompt_version
+  - 出：ResumeObjectV1（严格 JSON）
+  - 失败：422 schema_invalid
+- chains/extract_jd.py（LCEL + PydanticOutputParser）
+  - 入/出 类似，产出 JDObjectV1
+- services/anchor.py
+  - 生成 AnchorTextV1（规范化文本）；对 evidence.quote 做对齐 → evidence.{start,end,anchor_sha256}
+- chains/plan_letter.py → CoverPlanV1（≤3 why_me, 仅证据引用）
+- chains/generate_letter.py → HTML（语义结构；不得新增事实数字）
+- guardrails/validate.py → 校验：每段≤3行、禁词、≥1 个 jd_unique_terms、证据 ID 存在、数字来自证据
+
+数据库与版本化（新增/扩展表）
+- documents(id, kind)
+- document_versions(id, document_id, file_sha256, mime, uploaded_at)
+- anchor_texts(id, doc_version_id, anchor_sha256, text)
+- extraction_runs(id, doc_version_id, kind, prompt_version, model, params_json, status, created_at)
+- resume_objects(id, doc_version_id, extract_version, prompt_version, model, json, created_at)
+- jd_objects(id, doc_version_id, extract_version, prompt_version, model, json, created_at)
+- generation_runs(id, resume_obj_id, jd_obj_id, plan_json_sha, html_sha, model, params_json, timings_json, created_at)
+
+API（A/B/C/D）
+- A：POST /api/extract/resume
+  - form: file；header: x-prompt-version（可选）
+  - 返：{ resumeObjId, docVersionId, extract_version, prompt_version }
+  - 错：501/415/422
+- B：POST /api/extract/jd（同上）
+- C：GET /api/resume_objects/{id}；GET /api/jd_objects/{id}
+- D：POST /api/generate/letter2
+  - body: { resumeObjId, jdObjId, style, language:'auto'|'zh'|'en', params:{ paragraphs_max, target_words } }
+  - 流程：plan → generate → validate → persist → 返回 { genId, html }
+  - 错：422 guardrail_failed/schema_invalid
+
+Prompt 提纲（v1）
+- ResumeExtract：严格 JSON（ResumeObjectV1），bullets 必含 AOM 与 evidence.quote
+- JDExtract：严格 JSON（JDObjectV1），需产出 jd_unique_terms
+- Plan：四段式规划，仅引用 evidence_id，≤3 条 why_me
+- Generate：按规划输出语义 HTML（header/main/section/footer），每段≤3行，语言按策略
+
+错误策略
+- 501 provider_no_file_support（模型不支持文件上传）
+- 422 schema_invalid（抽取 JSON 校验失败）
+- 422 guardrail_failed（受控校验不通过）
+- 400 bad_request；415 unsupported_media_type
+
+审计与可复现
+- 记录每步 prompt_version、完整提示词、模型与参数、timings、tokens、inputs/outputs 摘要；同文档多版本并存；latest 指针
+
+测试方法
+- 合同测试：PDF/DOCX/TXT/OCR 图片上传；501/422/415 错误路径
+- 结构化测试：对象 JSON Schema 校验；evidence 指针切片与 quote 一致
+- 端到端：extract(resume)+extract(jd) → letter2 → PDF 导出
+
+实施清单（新增任务）
+
+### TASK008 文件能力 Provider（必需）
+- 版本：v1.1｜状态：计划中
+- 子任务：
+  1) 新增 FileCapableLLM 接口与 GeminiFileCapable 实现
+  2) 检测不支持文件模型 → 501 provider_no_file_support
+  3) 审计：记录模型/版本与文件 token 数
+- 验收：不支持模型时准确报错；支持模型能返回 token 并生成
+- AI 助手提示词：
+```
+Implement FileCapableLLM (upload/generate) using Gemini SDK; raise 501 if model lacks file support; add unit tests for both paths.
+```
+
+### TASK009 简历抽取 API（A 点）
+- 版本：v1.1｜状态：计划中
+- 子任务：
+  1) POST /api/extract/resume：接收 file，调用 extract_resume 链
+  2) PydanticOutputParser 强校验；422 on invalid
+  3) 生成 AnchorTextV1；对齐 evidence 指针（start,end,anchor_sha256）
+  4) 持久化 resume_object 与 extraction_runs
+- 验收：返回 resumeObjId；不合规时 422；不支持文件时 501
+- AI 助手提示词：
+```
+Build extract_resume chain producing ResumeObjectV1; validate JSON; align evidence pointers over normalized anchor text; persist with version info.
+```
+
+### TASK010 JD 抽取 API（B 点）
+- 版本：v1.1｜状态：计划中
+- 子任务：与 TASK009 对称，实现 JDObjectV1 与持久化
+- 验收：返回 jdObjId；422/501 错误路径正确
+- AI 助手提示词：
+```
+Build extract_jd chain producing JDObjectV1 with jd_unique_terms; strict validation and persistence.
+```
+
+### TASK011 锚文本与证据指针
+- 版本：v1.1｜状态：计划中
+- 子任务：
+  1) services/anchor：生成标准化文本并保存 AnchorTextV1
+  2) 对 evidence.quote 定位为全局字符区间；无法定位即报错
+- 验收：evidence.{start,end} 切片与 quote 完全一致
+- AI 助手提示词：
+```
+Implement anchor normalization and quote alignment; produce {start,end,anchor_sha256}; add tests to assert exact slice match.
+```
+
+### TASK012 规划与受控生成（D 点 letter2）
+- 版本：v1.1｜状态：计划中
+- 子任务：
+  1) plan_letter：输出 CoverPlanV1（≤3 why_me，仅证据引用）
+  2) generate_letter：按规划生成语义 HTML；禁止新增事实数字
+  3) guardrails：段落≤3行、禁词、≥1 个 jd_unique_terms、证据/数字校验
+  4) API：POST /api/generate/letter2；持久化 HTML 与审计
+- 验收：合格 HTML 返回；违反规则时 422 guardrail_failed
+- AI 助手提示词：
+```
+Implement plan->generate->validate pipeline; enforce constraints; return 422 on guardrail failure; persist outputs with audit.
+```
+
+### TASK013 DB 扩展与版本化审计
+- 版本：v1.1｜状态：计划中
+- 子任务：新增/迁移上述表；latest 指针与查询
+- 验收：同一 doc_version 支持多抽取版本共存；可按 prompt_version 检索
+- AI 助手提示词：
+```
+Add DB tables & migrations; expose queries by doc_version and prompt_version; ensure referential integrity.
+```
+
+### TASK014 合同与端到端测试
+- 版本：v1.1｜状态：计划中
+- 子任务：
+  1) 合同测试：PDF/DOCX/TXT/OCR 错误路径（501/422/415）
+  2) 结构化测试：Schema 校验与 evidence slice 一致性
+  3) E2E：extract(resume)+extract(jd) → letter2 → PDF
+- 验收：测试全部通过；关键错误路径可复现
+- AI 助手提示词：
+```
+Write contract & E2E tests covering success and failure paths; assert evidence pointer correctness.
+```
+
+### TASK015 前端对接（可选）
+- 版本：v1.1｜状态：计划中
+- 子任务：Compose 调整为调用 extract→letter2；保留旧流兼容；显示基础错误提示
+- 验收：最短闭环成功；错误码（501/422/415）指引清晰
+- AI 助手提示词：
+```
+Wire frontend to new endpoints; update .env as needed; keep legacy flow as fallback toggle (dev only).
+```

@@ -4,6 +4,7 @@ from .core.config import settings, ensure_storage_dirs
 from .core.errors import register_exception_handlers
 from .db.engine import create_all
 from .routers import resumes, jobs, generate, exports, audit
+from .routers import extract_llm, letter2
 
 
 def create_app() -> FastAPI:
@@ -22,6 +23,8 @@ def create_app() -> FastAPI:
     app.include_router(resumes.router, prefix="/api")
     app.include_router(jobs.router, prefix="/api")
     app.include_router(generate.router, prefix="/api")
+    app.include_router(extract_llm.router, prefix="/api")
+    app.include_router(letter2.router, prefix="/api")
     app.include_router(exports.router)
     app.include_router(audit.router, prefix="/api")
 
