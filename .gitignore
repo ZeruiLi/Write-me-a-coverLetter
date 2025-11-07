@@ -29,6 +29,10 @@ venv/
 storage/resumes/
 storage/exports/
 storage/audit/
+# Keep placeholders
+!storage/resumes/.gitkeep
+!storage/exports/.gitkeep
+!storage/audit/.gitkeep
 
 # Playwright/Chromium caches
 .cache/
