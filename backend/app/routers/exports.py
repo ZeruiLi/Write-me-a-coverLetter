@@ -20,9 +20,17 @@ def export_letter_pdf(req: ExportPDFRequest, db: Session = Depends(get_session))
     gen = None
     if req.genId is not None:
         gen = db.get(models.Generation, req.genId)
-        if gen and (not html):
-            # load from file if exists; else from output_summary/params not appropriate
-            html = gen.output_path and Path(gen.output_path).exists() and Path(gen.output_path).read_text(encoding="utf-8") or html
+        if gen and not html:
+            # Try recorded output_path first
+            if gen.output_path:
+                p = Path(gen.output_path)
+                if p.exists():
+                    html = p.read_text(encoding="utf-8")
+            # Fallback to conventional path
+            if not html:
+                p2 = settings.storage_exports / str(gen.id) / "letter.html"
+                if p2.exists():
+                    html = p2.read_text(encoding="utf-8")
     if not html:
         from ..core.errors import AppError
         raise AppError("no_html", 400, "No HTML provided and genId not found")
@@ -36,4 +44,3 @@ def export_letter_pdf(req: ExportPDFRequest, db: Session = Depends(get_session))
         out_path.write_bytes(pdf_bytes)
         gen.output_path = str(out_path)
     return Response(content=pdf_bytes, media_type="application/pdf")
-

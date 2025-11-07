@@ -29,6 +29,7 @@ venv/
 storage/resumes/
 storage/exports/
 storage/audit/
+storage/*.db
 # Keep placeholders
 !storage/resumes/.gitkeep
 !storage/exports/.gitkeep

@@ -51,7 +51,14 @@ def gen_short(req: GenerateShortRequest, db: Session = Depends(get_session)):
     snap_data = snap.data if snap else {}
 
     provider = GeminiProvider()
-    text, timings = short_answer(snap_data, req.job if isinstance(req.job, dict) else req.job.model_dump(), req.question, out_lang, {}, provider)
+    text, timings = short_answer(
+        snap_data,
+        req.job if isinstance(req.job, dict) else req.job.model_dump(),
+        req.question,
+        out_lang,
+        {},
+        provider,
+    )
 
     gen = models.Generation(
         resume_id=resume.id,
@@ -71,6 +78,16 @@ def gen_short(req: GenerateShortRequest, db: Session = Depends(get_session)):
         created_at=datetime.utcnow(),
     )
     record_generation(db, gen)
+
+    # Persist short answer text for audit/consumption
+    try:
+        out_dir = settings.storage_exports / str(gen.id)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        txt_path = out_dir / "short.txt"
+        txt_path.write_text(text, encoding="utf-8")
+        gen.output_path = str(txt_path)
+    except Exception:
+        pass
 
     return GenerateShortResponse(genId=gen.id, text=text)
 
@@ -137,6 +154,15 @@ def gen_letter(req: GenerateLetterRequest, db: Session = Depends(get_session)):
     )
     record_generation(db, gen)
 
+    # Persist HTML content to file so that PDF export by genId works
+    try:
+        out_dir = settings.storage_exports / str(gen.id)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        html_path = out_dir / ("letter.html" if req.format == "html" else "letter.md")
+        html_path.write_text(content or "", encoding="utf-8")
+        gen.output_path = str(html_path)
+    except Exception:
+        pass
+
     meta = {"style": req.style, "language": out_lang, "counts": {"chars": len(content or "")}}
     return GenerateLetterResponse(genId=gen.id, format=req.format, content=content, meta=meta)
-
