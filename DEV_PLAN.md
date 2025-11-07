@@ -1,202 +1,195 @@
 # Development Plan (v1.0 → v2.0 → v3.0)
 
-本计划遵循版本演进思路：
-- v1.0 最小可用：上传简历 + 输入 JD → 生成短答 或 生成封面信（PDF）
-- v2.0 体验增强：标签/检索、模板系统化、审计可视化、稳定性提升
-- v3.0 扩展能力：多用户命名空间、模型适配矩阵、A/B 实验、模板与导出生态
-
-每个 TASK 包含：版本号、状态（计划中/开发中/测试中/完成）、最小粒度子任务、AI 助手可执行提示词、验收标准（清单）、注意事项。
-
----
-
-## v1.0（最小可用）
-
-### TASK001 仓库初始化与骨架
-- 版本号：v1.0
-- 状态：计划中
-- 子任务：
-  1) 建立 monorepo 目录：`frontend/`、`backend/`、`storage/`、`templates/`、`docs/`、`scripts/`
-  2) 添加规范化文件：`LICENSE`(MIT)、`.editorconfig`、`.gitignore`、`.nvmrc`(v20)、`.python-version`(3.11)、`.env.example`
-  3) 编写 `README.md`（蓝图）与 `DEV_PLAN.md`（本文件）
-- AI 助手提示词：
-  - 请在空仓库中创建上述目录与占位 README/.gitkeep，添加顶层规范化文件与环境样例，并撰写 README 蓝图与 DEV_PLAN 结构稿，不引入任何可运行代码。
-- 验收标准：
-  - 目录与文件存在且内容完整；README/DEV_PLAN 覆盖蓝图与任务清单
-- 注意事项：
-  - 不加入依赖与可执行脚本；不提交真实密钥
-
-### TASK002 后端骨架（占位）
-- 版本号：v1.0
-- 状态：计划中
-- 子任务：
-  1) 目录与文件占位：`backend/app/`、`backend/tests/`、`backend/README.md` 更新模块说明
-  2) 仅文档声明 FastAPI 入口、CORS、健康检查；不实现代码
-- AI 助手提示词：
-  - 在 backend/ 更新 README 说明后续将添加 FastAPI 入口与基础端点的规划，不添加任何 .py 文件。
-- 验收标准：
-  - 文档说明清晰、无代码实现
-- 注意事项：
-  - 坚持“1.0 初始提交不含可运行代码”的边界
-
-### TASK003 文档摄取与解析（设计占位）
-- 版本号：v1.0
-- 状态：计划中
-- 子任务：
-  1) 设计说明：支持 PDF/DOCX/TXT/MD + OCR(JPG/PNG)，语言自动检测
-  2) 解析快照结构定义（字段清单，JSON Schema 草案）
-- AI 助手提示词：
-  - 在 docs/ 新增解析与 OCR 的设计说明文件（不含代码），列出字段与流程。
-- 验收标准：
-  - 设计文档存在且字段定义完整
-- 注意事项：
-  - 暂不接入任何真实依赖
-
-### TASK004 生成接口（设计占位）
-- 版本号：v1.0
-- 状态：计划中
-- 子任务：
-  1) 短答接口与参数约束（≤200 字，默认随 JD 语言）
-  2) 封面信生成参数（风格/段落/字数/关键词/语言）与返回结构（Markdown/HTML）
-- AI 助手提示词：
-  - 在 docs/ 新增 API 设计说明文件，描述 /generate/short 与 /generate/letter 的请求/响应。
-- 验收标准：
-  - API 设计文档完整且可据此实现
-- 注意事项：
-  - 记录审计字段（模型、温度、惩罚、提示词、种子、时间戳、输入哈希）
-
-### TASK005 PDF 导出（设计占位）
-- 版本号：v1.0
-- 状态：计划中
-- 子任务：
-  1) HTML→PDF 渲染方案（Playwright/Chromium）与 A4 版式规则
-  2) Formal/Warm/Tech 三套模板的区块定义与变量命名
-- AI 助手提示词：
-  - 在 templates/ 与 docs/ 中分别添加模板占位与样式规范文档（不含实现）。
-- 验收标准：
-  - 模板区块与排版规范清晰
-- 注意事项：
-  - 字体回退列表与中英兼容策略
-
-### TASK006 审计与复现（设计占位）
-- 版本号：v1.0
-- 状态：计划中
-- 子任务：
-  1) 审计记录表结构（SQLite 字段）与 JSON 导出格式
-  2) 复现所需参数最小集合定义
-- AI 助手提示词：
-  - 在 docs/ 新增审计结构说明，列出字段和复现指令格式。
-- 验收标准：
-  - 字段定义齐全，可驱动后续实现
-- 注意事项：
-  - 不记录超出必要的个人敏感信息
+本版变更（2025-11）
+- 阶段转换：从“仅占位”进入“可执行级规范（不写代码）”。
+- 范围聚焦：仅细化 v1.0 所有 TASK；v2.0/v3.0 暂不拉齐到相同粒度。
+- 明确 AI 助手提示词需包含：环境与依赖前置（Poetry、pnpm、Playwright、Tesseract）、文件路径约定与可复制执行上下文。
+- 性能与可观测性：v1.0 不锁定 SLO；但必须定义并记录计时与度量字段的数据结构。
+- i18n 规则：当 JD 语言与用户手动选择冲突时，以“用户手动选择”为最高优先级。
 
 ---
 
-## v2.0（体验增强）
+## v1.0 全局规范与前置
 
-### TASK101 标签与检索增强
-- 版本号：v2.0
-- 状态：计划中
-- 子任务：
-  1) 前端筛选器与多标签组合
-  2) 后端标签索引与分页
-- AI 助手提示词：
-  - 在 frontend/ 与 backend/ 的 README 中补充实现计划与 API 变更草案。
-- 验收标准：
-  - 1 万条记录内检索流畅
-- 注意事项：
-  - 合理的索引与查询策略
+工具链与环境
+- Node v20（.nvmrc），pnpm；Python 3.11（.python-version），Poetry
+- Playwright（Chromium 无头浏览器）；Tesseract OCR（含中文/英文语言包）
+- 操作系统：macOS/Windows/Linux 任一；需具备本地文件读写权限
 
-### TASK102 模板与样式系统化
-- 版本号：v2.0
-- 状态：计划中
-- 子任务：
-  1) 样式变量化与模板热替换
-  2) 封面信元素粒度化配置
-- AI 助手提示词：
-  - 在 templates/ 与 docs/ 说明模板参数化与主题切换机制。
-- 验收标准：
-  - 无需改代码即可切换模板与风格
-- 注意事项：
-  - 模板版本化与兼容
+环境变量（.env.example 已提供）
+- MODEL_PROVIDER=gemini（默认）
+- GEMINI_API_KEY（必填，当 provider=gemini）
+- OPENAI_API_KEY（可选，预留）
+- DATABASE_URL=sqlite:///./storage/app.db
+- OCR_ENABLED=true（默认）
+- PDF_RENDERER=chromium（默认）
+- DEFAULT_OUTPUT_LANG=auto
+- APP_PORT=3000 / API_PORT=8000
 
-### TASK103 审计可视化
-- 版本号：v2.0
-- 状态：计划中
-- 子任务：
-  1) 参数/提示词/模型版本可视化
-  2) 一键复现按钮与副本生成
-- AI 助手提示词：
-  - 在 frontend/ README 增加 UI 交互草图与数据接口对接说明。
-- 验收标准：
-  - 可从历史记录中复现任意生成
-- 注意事项：
-  - 明确只读与再生成的权限边界
+路径与命名约定
+- 上传原文件：storage/resumes/{resumeId}/{original_filename}
+- 解析快照：storage/audit/{resumeId}/snapshot_{iso}.json
+- 生成产物：storage/exports/{genId}/letter.html|letter.pdf|short.txt
+- 标识符：resumeId/genId 均为 `yyyyMMddHHmmss_{8位随机}` 或 DB 自增 id；同时存储 sha256 文件指纹
 
-### TASK104 稳定性与弹性
-- 版本号：v2.0
-- 状态：计划中
-- 子任务：
-  1) 超时、重试、退避策略
-  2) 可观测性日志与错误分级
-- AI 助手提示词：
-  - 在 backend/ README 增补中间件与日志结构设计。
-- 验收标准：
-  - 异常场景提示清晰，可恢复
-- 注意事项：
-  - 限流与背压的边界
+i18n 策略
+- 输出语言=用户手动选择（若设置）> JD 自动识别语言 > DEFAULT_OUTPUT_LANG
+
+可观测性与计时字段（v1.0 必须记录，暂不设 SLO）
+- ingestion_ms、ocr_ms、parse_ms、match_ms、generate_ms、render_ms、total_ms
+- model_provider、model_name、temperature、top_p、penalties、seed
+- tokens_prompt、tokens_completion（若可得）
+- input_hash（简历/JD 摘要哈希，sha256 前 12 位）、timestamp、request_id
+- 结构化示例（JSON）：
+```
+{
+  "request_id": "2025-11-07T12:00:00Z_abc12345",
+  "timestamps": {"start": "...", "end": "..."},
+  "timings_ms": {"ingestion": 120, "ocr": 380, "parse": 220, "match": 90, "generate": 950, "render": 310, "total": 2070},
+  "model": {"provider": "gemini", "name": "gemini-2.5-flash", "temperature": 0.6, "top_p": 1.0, "seed": 0},
+  "tokens": {"prompt": 1200, "completion": 650},
+  "inputs": {"resume_hash": "a1b2c3d4e5f6", "jd_hash": "f6e5d4c3b2a1"}
+}
+```
 
 ---
 
-## v3.0（扩展能力）
+## v1.0（最小可用）— 可执行级规范
 
-### TASK201 多用户命名空间
-- 版本号：v3.0
-- 状态：计划中
-- 子任务：
-  1) 轻量用户命名空间设计与目录/DB 隔离
-  2) 用户切换与权限模型（本地）
-- AI 助手提示词：
-  - 在 docs/ 增加命名空间与多用户数据隔离设计。
-- 验收标准：
-  - 不同用户数据互不可见
-- 注意事项：
-  - 兼容单机单用户模式
+### TASK001 仓库初始化与骨架（已完成）
+- 版本号：v1.0
+- 状态：完成
+- 交付物：monorepo 目录、规范化文件、README 蓝图、DEV_PLAN 草案
+- 验收断言：根目录存在 README.md/DEV_PLAN.md/LICENSE/.editorconfig/.gitignore/.nvmrc/.python-version/.env.example；六大目录存在且含占位
+- 注意事项：无代码；无机密
 
-### TASK202 模型适配矩阵
-- 版本号：v3.0
+### TASK002 后端骨架（FastAPI 占位规范）
+- 版本号：v1.0
 - 状态：计划中
-- 子任务：
-  1) Provider 接口抽象与配置
-  2) Qwen 等厂商适配位实现计划
-- AI 助手提示词：
-  - 在 docs/ 设计 Provider 抽象与配置示例。
-- 验收标准：
-  - 切换 Provider 无需改业务层
-- 注意事项：
-  - 环境变量与密钥管理
+- 文件与结构（不实现）：
+  - backend/app/main.py（FastAPI 实例创建、CORS；/healthz GET→{"ok":true}）
+  - backend/app/routers/{resumes,jobs,generate,exports,audit}.py（空路由占位）
+  - backend/app/db/{engine.py,models.py,schema.py}（占位：SQLite/SQLAlchemy + Pydantic）
+- 输入/输出示例：
+  - GET /healthz → 200 {"ok": true}
+- 验收断言（实现时）：
+  - 启动成功；/healthz 返回 200/JSON schema 匹配
+- AI 助手可执行提示词（保留供实现用，不在本次执行）：
+```
+You are an AI coding assistant. Implement FastAPI skeleton.
+Prereqs: Poetry; run: poetry init -n; poetry add fastapi uvicorn[standard] pydantic sqlalchemy python-dotenv
+Files:
+- backend/app/main.py (create FastAPI app, enable CORS * for dev, add GET /healthz -> {"ok": true})
+- backend/app/routers/__init__.py and empty routers for resumes, jobs, generate, exports, audit
+- backend/app/db/engine.py (SQLite engine via DATABASE_URL), models.py, schema.py (placeholders)
+Command: poetry run uvicorn app.main:app --reload --port ${API_PORT:-8000}
+```
 
-### TASK203 A/B 实验与对比
-- 版本号：v3.0
+### TASK003 文档摄取与解析（含 OCR）
+- 版本号：v1.0
 - 状态：计划中
-- 子任务：
-  1) 参数组合对比
-  2) 评分与导出
-- AI 助手提示词：
-  - 在 docs/ 增加 A/B 方案与评分口径。
-- 验收标准：
-  - 可视化对比两份输出差异
-- 注意事项：
-  - 指标口径一致性
+- 接口：POST /api/resumes（multipart/form-data）
+  - 扩展名：pdf, docx, txt, md, jpg, jpeg, png
+  - 限制：max_size_mb=20；max_files=1；mime 必须匹配扩展
+  - 参数：tags[]=string（可选）、ocr=bool（默认读取 OCR_ENABLED）
+- 处理流程/状态机：
+  1) 校验与落盘 → 计算 sha256 → 新建 Resume 记录
+  2) 若为图片或 PDF 且 OCR 开启 → OCR 文本
+  3) 调用 LCEL 解析链 → 产出 ResumeSnapshot JSON
+  4) 写入 snapshot 文件与 DB，记录语言与提取置信度
+- ResumeSnapshot 结构（JSON 草案）：
+```
+{
+  "name": "string",
+  "contact": {"email": "string", "phone": "string", "location": "string"},
+  "links": {"github": "string", "linkedin": "string"},
+  "summary": "string",
+  "skills": ["string"],
+  "experiences": [{"company":"string","role":"string","start":"YYYY-MM","end":"YYYY-MM|Present","bullets":["string"]}],
+  "education": [{"school":"string","degree":"string","graduation":"YYYY"}],
+  "language": "zh|en",
+  "source": {"file_path":"string","sha256":"string"}
+}
+```
+- 成功响应（201）：{resumeId, snapshot:true}
+- 失败示例：415/413/400（类型不支持/超大小/OCR 关闭但文件为图像）
+- 验收断言：原文件与 snapshot.json 均存在；DB 中 Resume 与 Snapshot 均有记录；language 有值
+- 计时记录：ingestion_ms, ocr_ms, parse_ms, total_ms
+- AI 助手提示词（供实现）：
+```
+Implement ingestion+parse with LCEL.
+Prereqs: poetry add langchain langchain-google-genai pdfplumber python-magic pytesseract
+Steps: save file -> sha256 -> OCR if needed -> LCEL chain to extract fields -> write snapshot JSON -> DB rows
+Paths: storage/resumes/{resumeId}/..., storage/audit/{resumeId}/snapshot_*.json
+```
+
+### TASK004 JD 规范化与生成接口（短答/封面信）
+- 版本号：v1.0
+- 状态：计划中
+- JD 规范化：POST /api/jobs/normalize
+  - 输入：{text:string} 或 文件（同上类型）
+  - 输出（JSON）：{"role":"string","responsibilities":["string"],"requirements":["string"],"keywords":["string"],"language":"zh|en"}
+- 短答生成：POST /api/generate/short
+  - 输入：{resumeId, job:{text|normalized}, question: enum[why_company, why_you, biggest_achievement], language: auto|zh|en}
+  - 规则：最终输出≤200 字符（单段纯文本，移除 Markdown/HTML）；语言按 i18n 策略
+  - 成功：200 {genId, text}
+  - 失败：404 无 snapshot；400 非法 question；502 模型错误
+- 封面信生成：POST /api/generate/letter
+  - 输入：{resumeId, job:{text|normalized}, style: enum[Formal,Warm,Tech] (default=Formal), paragraphs_max:int(1..7, default=5), target_words:int(200..700, default=400), include_keywords:[string], avoid_keywords:[string], language:auto|zh|en}
+  - 输出：{genId, format: md|html (default=html), content:string, meta:{style,language,counts}}
+  - 验收：content 结构包含：抬头、称呼、主体段落(<=paragraphs_max)、结尾签名；include/avoid 冲突→优先避免，并在 meta.notes 记录
+- 计时记录：match_ms, generate_ms, total_ms；tokens_prompt/completion
+- AI 助手提示词（供实现）：
+```
+Implement normalize+generate with LCEL (Gemini flash).
+Prereqs: poetry add langchain langchain-google-genai tiktoken
+Prompts: enforce max 200 chars for short (no Markdown); letter outputs semantic HTML (<header><main><section>...).
+Parameters: style, paragraphs_max, target_words, include/avoid, language priority: user > JD > default.
+```
+
+### TASK005 HTML→PDF 导出
+- 版本号：v1.0
+- 状态：计划中
+- 接口：POST /api/exports/letter/pdf
+  - 输入：{genId?, html?, options:{page:"A4", margin_cm:2.0, line_height:1.35, header:{enabled:true,name,contact}, fonts:{en:["Inter","Times"], zh:["Noto Sans CJK","SimSun"]}}
+  - 行为：优先 genId；否则用 html 直接渲染；保存至 storage/exports/{genId}/letter.pdf
+  - 输出：application/pdf 字节流
+- 验收断言：A4；边距=2.0cm（±1%）；行距≈1.35（±0.05）；字体可回退；页眉可开关
+- 失败：400（无 html 且无 genId）；502（渲染器错误）
+- 计时记录：render_ms, total_ms
+- AI 助手提示词（供实现）：
+```
+Prereqs: playwright install chromium; poetry add playwright
+Render HTML with Chromium headless; inject CSS variables for page size/margins/line-height/fonts.
+```
+
+### TASK006 审计与复现
+- 版本号：v1.0
+- 状态：计划中
+- 记录内容（DB + JSON 文件）：
+  - genId, resumeId, job_hash, type: short|letter
+  - model_provider/name, temperature/top_p/penalties, seed
+  - params: style/paragraphs_max/target_words/include/avoid/language
+  - prompt_full（完整提示词）、tokens_prompt/completion（可选）
+  - timings：见全局计时字段；timestamp
+  - outputs：text/html 路径与摘要（前 120 字）
+- 接口：GET /api/audit/{genId} → 返回上述结构
+- 复现原则：同一 provider/model + 相同 seed/params → 期望输出相似（非完全一致）
+- 验收断言：生成后可立即查询到审计；导出 JSON 与 DB 一致
+- AI 助手提示词（供实现）：
+```
+Design ORM & Pydantic schemas; persist audit rows and write JSON snapshot per generation under storage/audit/{genId}. Capture timings and full prompt.
+```
 
 ---
+
+## v2.0 / v3.0 提示
+- 维持原有目录与任务占位，不在本版细化到可执行级。
 
 ## 版本与分支策略（文档化）
-- 主分支：main
-- 分支命名：feat/*、fix/*、chore/*、docs/*、refactor/*、release/*
+- 主分支：main；命名：feat/*、fix/*、chore/*、docs/*、refactor/*、release/*
 - 前端包管理：pnpm；后端依赖：Poetry
 
 ## 环境与运行（文档化）
-- Node：.nvmrc = v20
-- Python：.python-version = 3.11
+- Node：.nvmrc = v20；Python：.python-version = 3.11
 - 环境变量：见 `.env.example`
