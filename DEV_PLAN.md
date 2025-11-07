@@ -27,20 +27,21 @@
 - APP_PORT=3000 / API_PORT=8000
 
 路径与命名约定
-- 上传原文件：storage/resumes/{resumeId}/{original_filename}
-- 解析快照：storage/audit/{resumeId}/snapshot_{iso}.json
-- 生成产物：storage/exports/{genId}/letter.html|letter.pdf|short.txt
-- 标识符：resumeId/genId 均为 `yyyyMMddHHmmss_{8位随机}` 或 DB 自增 id；同时存储 sha256 文件指纹
+- 上传原文件：`storage/resumes/{resumeId}/{original_filename}`
+- 解析快照：`storage/audit/{resumeId}/snapshot_{iso}.json`
+- 生成产物：`storage/exports/{genId}/letter.html|letter.pdf|short.txt`
+- 标识符：`resumeId`/`genId` 采用 `yyyyMMddHHmmss_{8位随机}` 或 DB 自增 id；同时存储 sha256 文件指纹
 
 i18n 策略
-- 输出语言=用户手动选择（若设置）> JD 自动识别语言 > DEFAULT_OUTPUT_LANG
+- 输出语言优先级：用户手动选择（若设置）> JD 自动识别语言 > DEFAULT_OUTPUT_LANG
 
 可观测性与计时字段（v1.0 必须记录，暂不设 SLO）
-- ingestion_ms、ocr_ms、parse_ms、match_ms、generate_ms、render_ms、total_ms
-- model_provider、model_name、temperature、top_p、penalties、seed
-- tokens_prompt、tokens_completion（若可得）
-- input_hash（简历/JD 摘要哈希，sha256 前 12 位）、timestamp、request_id
-- 结构化示例（JSON）：
+- timings：ingestion_ms、ocr_ms、parse_ms、match_ms、generate_ms、render_ms、total_ms
+- model：model_provider、model_name、temperature、top_p、penalties、seed
+- tokens：tokens_prompt、tokens_completion（若可得）
+- inputs：input_hash（简历/JD 摘要哈希，sha256 前 12 位）
+- 其他：timestamp、request_id
+- JSON 示例：
 ```
 {
   "request_id": "2025-11-07T12:00:00Z_abc12345",
@@ -52,144 +53,219 @@ i18n 策略
 }
 ```
 
+依赖管理（Poetry 运行时）
+- fastapi, uvicorn[standard], pydantic, sqlalchemy, python-dotenv
+- langchain, langchain-core, langchain-google-genai
+- pdfplumber, python-multipart, pillow, pytesseract, python-magic, langdetect, tenacity
+- playwright（用于 HTML→PDF）
+- 可选/后续：alembic, structlog
+
 ---
 
-## v1.0（最小可用）— 可执行级规范
+## 目录与组件（后端）
+- backend/app/main.py — FastAPI 实例与路由注册、CORS、/healthz
+- backend/app/core/config.py — 环境加载（env→Settings），含默认值与校验
+- backend/app/core/errors.py — `AppError(code,http,msg)` 与全局异常处理器
+- backend/app/core/logging.py — 日志初始化（可延后）
+- backend/app/db/engine.py — SQLAlchemy Engine/Session/Base 初始化
+- backend/app/db/session.py — `get_session()` 依赖注入
+- backend/app/db/models.py — ORM：Resume, ResumeSnapshot, Generation
+- backend/app/schemas/{resume,job,generate,export,audit}.py — Pydantic 模型
+- backend/app/routers/{resumes,jobs,generate,exports,audit}.py — REST 路由
+- backend/app/services/{ingestion,ocr,detect,parsing,matching,generation,render,audit}.py — 领域服务
+- backend/app/providers/{base.py,gemini.py} — LLM Provider 接口与实现
+- backend/app/prompts/{short.txt,letter.txt,normalize.txt} — Prompt 模板
 
-### TASK001 仓库初始化与骨架（已完成）
-- 版本号：v1.0
-- 状态：完成
-- 交付物：monorepo 目录、规范化文件、README 蓝图、DEV_PLAN 草案
-- 验收断言：根目录存在 README.md/DEV_PLAN.md/LICENSE/.editorconfig/.gitignore/.nvmrc/.python-version/.env.example；六大目录存在且含占位
-- 注意事项：无代码；无机密
+---
 
-### TASK002 后端骨架（FastAPI 占位规范）
-- 版本号：v1.0
-- 状态：计划中
-- 文件与结构（不实现）：
-  - backend/app/main.py（FastAPI 实例创建、CORS；/healthz GET→{"ok":true}）
-  - backend/app/routers/{resumes,jobs,generate,exports,audit}.py（空路由占位）
-  - backend/app/db/{engine.py,models.py,schema.py}（占位：SQLite/SQLAlchemy + Pydantic）
-- 输入/输出示例：
-  - GET /healthz → 200 {"ok": true}
-- 验收断言（实现时）：
-  - 启动成功；/healthz 返回 200/JSON schema 匹配
-- AI 助手可执行提示词（保留供实现用，不在本次执行）：
+## 数据模型（ORM 简化定义）
+- Resume：
+  - id:int PK, file_path:str, file_name:str, sha256:str, mime:str, lang:str, tags:JSON(list[str]), created_at:datetime
+- ResumeSnapshot：
+  - id:int PK, resume_id:int FK, data:JSON, lang:str, created_at:datetime
+- Generation：
+  - id:int PK, resume_id:int FK, job_hash:str, type:str('short'|'letter'), provider:str, model:str,
+  - temperature:float, top_p:float, seed:int, params:JSON, prompt:str, timings:JSON, tokens:JSON,
+  - output_path:str, output_summary:str, created_at:datetime
+
+## Schemas（Pydantic 主要签名）
+- ResumeCreateResponse { resumeId:int, snapshot:bool }
+- ResumeOut { id:int, fileName:str, tags:list[str], lang:str, createdAt:str }
+- JobNormalizeRequest { text?:str } | multipart(file)
+- JobNormalized { role:str, responsibilities:list[str], requirements:list[str], keywords:list[str], language:Literal['zh','en'] }
+- GenerateShortRequest { resumeId:int, job:{text?:str, normalized?:JobNormalized}, question:Literal['why_company','why_you','biggest_achievement'], language:Literal['auto','zh','en']='auto' }
+- GenerateShortResponse { genId:int, text:str }
+- GenerateLetterRequest { resumeId:int, job:{...}, style:Literal['Formal','Warm','Tech']='Formal', paragraphs_max:int=5 (1..7), target_words:int=400 (200..700), include_keywords:list[str]=[], avoid_keywords:list[str]=[], language:'auto'|'zh'|'en'='auto', format:Literal['html','md']='html' }
+- GenerateLetterResponse { genId:int, format:'html'|'md', content:str, meta:{style,language,counts,notes?:str} }
+- ExportPDFRequest { genId?:int, html?:str, options:{ page:'A4', margin_cm:float=2.0, line_height:float=1.35, header:{enabled:bool,name?:str,contact?:str}, fonts:{en:list[str], zh:list[str]} } }
+- AuditResponse { 与 Generation 字段对齐，含 outputs 路径与摘要 }
+
+---
+
+## Provider 接口与 LCEL 链（概念与签名）
+- providers/base.py
+  - `class LLMProvider(Protocol):`
+  - `def generate(self, prompt:str, temperature:float=0.6, top_p:float=1.0, seed:int=0, **kw)->str`
+- providers/gemini.py
+  - `class GeminiProvider(LLMProvider):`
+  - `def __init__(self, api_key:str, model:str='gemini-2.5-flash')`
+- LCEL 链（parsing/normalize/short/letter）：从 `prompts/*.txt` 注入参数；`langdetect` 决策语言；对短答强制长度与纯文本；对封面信输出语义 HTML
+
+---
+
+## 服务层函数签名
+- services/ingestion.py
+  - `def save_upload(file:UploadFile, dst_dir:Path)->tuple[Path,str]`  # 返回落盘路径与 sha256
+  - `def allowed_ext(filename:str)->bool`
+- services/ocr.py
+  - `def ocr_image(path:Path, lang:str='chi_sim+eng')->str`
+  - `def ocr_pdf(path:Path, lang:str='chi_sim+eng')->str`
+- services/detect.py
+  - `def detect_lang(text:str)->Literal['zh','en']`
+- services/parsing.py
+  - `def build_parse_chain(provider:LLMProvider)->Runnable`
+  - `def parse_resume(text:str, meta:dict, provider:LLMProvider)->dict`  # 输出 ResumeSnapshot JSON
+- services/matching.py
+  - `def extract_keywords(text:str)->list[str]`
+  - `def score_match(resume_snapshot:dict, jd:dict)->dict`  # 关键点对齐（可简化）
+- services/generation.py
+  - `def short_answer(resume_snap:dict, jd:any, question:str, lang:str, params:dict, provider:LLMProvider)->tuple[str,dict]`
+  - `def letter(resume_snap:dict, jd:any, params:dict, provider:LLMProvider)->tuple[str,dict]`
+- services/render.py
+  - `def html_template(style:str, payload:dict)->str`  # 可选：非 LLM 渲染路径
+  - `def html_to_pdf(html:str, options:dict)->bytes`
+- services/audit.py
+  - `def record_generation(db, gen:Generation)->None`
+  - `def get_audit(db, gen_id:int)->dict`  # 返回 AuditResponse
+
+---
+
+## REST 端点契约（FastAPI）
+- POST /api/resumes — 上传简历
+  - form：file, tags?[], ocr?（bool）
+  - 201 `{resumeId, snapshot:true}`；错误：415/413/400
+- GET /api/resumes — 列表/筛选
+  - query：q?（文件名/标签），limit?，offset?
+  - 200 `list[ResumeOut]`
+- POST /api/jobs/normalize — JD 规范化
+  - 入：`{text}` 或文件
+  - 出：`JobNormalized`
+- POST /api/generate/short — 短答
+  - 入：`GenerateShortRequest`
+  - 出：`GenerateShortResponse`
+  - 约束：最终≤200 字符，去除 Markdown/HTML
+- POST /api/generate/letter — 封面信
+  - 入：`GenerateLetterRequest`
+  - 出：`GenerateLetterResponse`
+  - 约束：结构包含抬头/称呼/主体(≤paragraphs_max)/签名；include/avoid 冲突→优先避免并记录 meta.notes
+- POST /api/exports/letter/pdf — 导出 PDF
+  - 入：`ExportPDFRequest`（优先 genId）
+  - 出：application/pdf；保存 `storage/exports/{genId}/letter.pdf`
+- GET /api/audit/{genId} — 审计详情
+  - 出：`AuditResponse`
+- GET /healthz — 健康检查
+
+---
+
+## 关键流程/状态机
+- 上传→解析
+  1) 校验扩展名/大小 → 落盘 → sha256
+  2) 文本提取：txt/md 直读；docx→python-docx；pdf→pdfplumber 或 OCR；image→OCR
+  3) detect_lang → build_parse_chain → parse_resume → snapshot JSON
+  4) DB：插入 Resume 与 Snapshot；保存 snapshot 文件
+  5) 写入 timings：ingestion/ocr/parse/total
+- 生成（短答/封面信）
+  1) 读取 Snapshot + JD（原文或规范化）
+  2) 构造 prompt（风格/长度/关键词/语言优先级）
+  3) provider.generate（重试与超时）→ 输出文本/HTML
+  4) 保存 Generation（prompt/params/timings/tokens/摘要）；写入 exports（text/html）
+- 导出 PDF
+  1) 有 genId：取 HTML；否则使用请求 html
+  2) Playwright 渲染 → 保存 → 返回
+- 审计
+  1) DB + JSON 快照聚合
+  2) 返回结构化详情（含复现关键参数）
+
+---
+
+## 错误处理与日志
+- HTTP 状态：400（参数）/404（不存在）/413（超限）/415（类型）/502（LLM/PDF 错）
+- 统一异常：`AppError(code,http,msg)`；全局异常处理器输出 `{code, message, detail?}`
+- 请求日志：request_id、path、status、total_ms；服务内部阶段性 timings 聚合到 Generation.timings
+
+---
+
+## 前端最小对接（v1.0）
+- 结构：`frontend/src/{main.tsx, App.tsx, routes/{Library.tsx,Compose.tsx,Questions.tsx}, components/{A4Preview.tsx,UploadDropzone.tsx,StyleSelector.tsx,LanguageSwitch.tsx}, api/client.ts}`
+- 配置：`.env` `VITE_API_BASE_URL=http://localhost:8000`
+- 流程：
+  - Library：上传（POST /api/resumes）、列表（GET /api/resumes）
+  - Compose：参数面板（style/paragraphs/words/keywords/lang）→ 生成 letter（/api/generate/letter）→ 预览 HTML → 导出 PDF
+  - Questions：选择问题 → /api/generate/short → 显示文本
+
+---
+
+## 测试方法（v1.0）
+- 单元：schemas 校验、allowed_ext/sha256、detect_lang、简单 matching
+- 合同：使用 httpx/pytest 对 REST 端点进行契约测试（200/4xx/5xx）
+- 假数据：`docs/` 提供示例简历与 JD；编排 E2E：上传→规范化→短答/封面信→导出→查询审计
+
+---
+
+## v1.0 任务清单（可执行级）
+
+### TASK001 仓库初始化与骨架（完成）
+- 验收：根文件与目录存在；不含可运行代码；README/DEV_PLAN 就绪
+
+### TASK002 后端骨架
+- 文件：见“目录与组件（后端）”列出的最小文件集合
+- 依赖：Poetry 添加 fastapi/uvicorn/pydantic/sqlalchemy/python-dotenv
+- 端点：GET /healthz 200→{"ok":true}
+- 验收：启动成功；/healthz 响应 Schema 正确
+- AI 助手提示词：
 ```
-You are an AI coding assistant. Implement FastAPI skeleton.
-Prereqs: Poetry; run: poetry init -n; poetry add fastapi uvicorn[standard] pydantic sqlalchemy python-dotenv
-Files:
-- backend/app/main.py (create FastAPI app, enable CORS * for dev, add GET /healthz -> {"ok": true})
-- backend/app/routers/__init__.py and empty routers for resumes, jobs, generate, exports, audit
-- backend/app/db/engine.py (SQLite engine via DATABASE_URL), models.py, schema.py (placeholders)
-Command: poetry run uvicorn app.main:app --reload --port ${API_PORT:-8000}
+Implement FastAPI skeleton with Poetry.
+Create files per plan; enable CORS(*); add GET /healthz; add config loader.
 ```
 
 ### TASK003 文档摄取与解析（含 OCR）
-- 版本号：v1.0
-- 状态：计划中
-- 接口：POST /api/resumes（multipart/form-data）
-  - 扩展名：pdf, docx, txt, md, jpg, jpeg, png
-  - 限制：max_size_mb=20；max_files=1；mime 必须匹配扩展
-  - 参数：tags[]=string（可选）、ocr=bool（默认读取 OCR_ENABLED）
-- 处理流程/状态机：
-  1) 校验与落盘 → 计算 sha256 → 新建 Resume 记录
-  2) 若为图片或 PDF 且 OCR 开启 → OCR 文本
-  3) 调用 LCEL 解析链 → 产出 ResumeSnapshot JSON
-  4) 写入 snapshot 文件与 DB，记录语言与提取置信度
-- ResumeSnapshot 结构（JSON 草案）：
+- 端点：POST /api/resumes；快照 Schema 见“ResumeSnapshot 结构”
+- 依赖：langchain, langchain-google-genai, pdfplumber, python-multipart, pillow, pytesseract, python-magic, langdetect
+- 验收：原文件与 snapshot.json 存在；DB 两表写入；language 有值；timings 记录
+- 失败示例：415/413/400
+- AI 助手提示词：
 ```
-{
-  "name": "string",
-  "contact": {"email": "string", "phone": "string", "location": "string"},
-  "links": {"github": "string", "linkedin": "string"},
-  "summary": "string",
-  "skills": ["string"],
-  "experiences": [{"company":"string","role":"string","start":"YYYY-MM","end":"YYYY-MM|Present","bullets":["string"]}],
-  "education": [{"school":"string","degree":"string","graduation":"YYYY"}],
-  "language": "zh|en",
-  "source": {"file_path":"string","sha256":"string"}
-}
-```
-- 成功响应（201）：{resumeId, snapshot:true}
-- 失败示例：415/413/400（类型不支持/超大小/OCR 关闭但文件为图像）
-- 验收断言：原文件与 snapshot.json 均存在；DB 中 Resume 与 Snapshot 均有记录；language 有值
-- 计时记录：ingestion_ms, ocr_ms, parse_ms, total_ms
-- AI 助手提示词（供实现）：
-```
-Implement ingestion+parse with LCEL.
-Prereqs: poetry add langchain langchain-google-genai pdfplumber python-magic pytesseract
-Steps: save file -> sha256 -> OCR if needed -> LCEL chain to extract fields -> write snapshot JSON -> DB rows
-Paths: storage/resumes/{resumeId}/..., storage/audit/{resumeId}/snapshot_*.json
+Implement ingestion+OCR+LCEL parse; save under storage/*; write DB and JSON snapshot; record timings.
 ```
 
-### TASK004 JD 规范化与生成接口（短答/封面信）
-- 版本号：v1.0
-- 状态：计划中
-- JD 规范化：POST /api/jobs/normalize
-  - 输入：{text:string} 或 文件（同上类型）
-  - 输出（JSON）：{"role":"string","responsibilities":["string"],"requirements":["string"],"keywords":["string"],"language":"zh|en"}
-- 短答生成：POST /api/generate/short
-  - 输入：{resumeId, job:{text|normalized}, question: enum[why_company, why_you, biggest_achievement], language: auto|zh|en}
-  - 规则：最终输出≤200 字符（单段纯文本，移除 Markdown/HTML）；语言按 i18n 策略
-  - 成功：200 {genId, text}
-  - 失败：404 无 snapshot；400 非法 question；502 模型错误
-- 封面信生成：POST /api/generate/letter
-  - 输入：{resumeId, job:{text|normalized}, style: enum[Formal,Warm,Tech] (default=Formal), paragraphs_max:int(1..7, default=5), target_words:int(200..700, default=400), include_keywords:[string], avoid_keywords:[string], language:auto|zh|en}
-  - 输出：{genId, format: md|html (default=html), content:string, meta:{style,language,counts}}
-  - 验收：content 结构包含：抬头、称呼、主体段落(<=paragraphs_max)、结尾签名；include/avoid 冲突→优先避免，并在 meta.notes 记录
-- 计时记录：match_ms, generate_ms, total_ms；tokens_prompt/completion
-- AI 助手提示词（供实现）：
+### TASK004 JD 规范化与生成
+- 端点：/api/jobs/normalize, /api/generate/short, /api/generate/letter
+- 依赖：langchain, langchain-google-genai
+- 约束：短答≤200 字符纯文本；封面信语义 HTML；语言优先级按 i18n 规则
+- 验收：响应结构正确；计时与 tokens（若可得）记录；include/avoid 冲突处理落入 meta.notes
+- AI 助手提示词：
 ```
-Implement normalize+generate with LCEL (Gemini flash).
-Prereqs: poetry add langchain langchain-google-genai tiktoken
-Prompts: enforce max 200 chars for short (no Markdown); letter outputs semantic HTML (<header><main><section>...).
-Parameters: style, paragraphs_max, target_words, include/avoid, language priority: user > JD > default.
+Build LCEL chains for normalize/short/letter; enforce length & structure; persist Generation rows & files.
 ```
 
 ### TASK005 HTML→PDF 导出
-- 版本号：v1.0
-- 状态：计划中
-- 接口：POST /api/exports/letter/pdf
-  - 输入：{genId?, html?, options:{page:"A4", margin_cm:2.0, line_height:1.35, header:{enabled:true,name,contact}, fonts:{en:["Inter","Times"], zh:["Noto Sans CJK","SimSun"]}}
-  - 行为：优先 genId；否则用 html 直接渲染；保存至 storage/exports/{genId}/letter.pdf
-  - 输出：application/pdf 字节流
-- 验收断言：A4；边距=2.0cm（±1%）；行距≈1.35（±0.05）；字体可回退；页眉可开关
-- 失败：400（无 html 且无 genId）；502（渲染器错误）
-- 计时记录：render_ms, total_ms
-- AI 助手提示词（供实现）：
+- 端点：/api/exports/letter/pdf；优先 genId
+- 依赖：playwright（Chromium）
+- 验收：A4；2.0cm；≈1.35；字体回退；页眉可开关
+- AI 助手提示词：
 ```
-Prereqs: playwright install chromium; poetry add playwright
-Render HTML with Chromium headless; inject CSS variables for page size/margins/line-height/fonts.
+Render HTML to PDF via Chromium; inject CSS variables; save under storage/exports/{genId}/.
 ```
 
 ### TASK006 审计与复现
-- 版本号：v1.0
-- 状态：计划中
-- 记录内容（DB + JSON 文件）：
-  - genId, resumeId, job_hash, type: short|letter
-  - model_provider/name, temperature/top_p/penalties, seed
-  - params: style/paragraphs_max/target_words/include/avoid/language
-  - prompt_full（完整提示词）、tokens_prompt/completion（可选）
-  - timings：见全局计时字段；timestamp
-  - outputs：text/html 路径与摘要（前 120 字）
-- 接口：GET /api/audit/{genId} → 返回上述结构
-- 复现原则：同一 provider/model + 相同 seed/params → 期望输出相似（非完全一致）
-- 验收断言：生成后可立即查询到审计；导出 JSON 与 DB 一致
-- AI 助手提示词（供实现）：
+- 端点：GET /api/audit/{genId}
+- 验收：生成后可立即查询；DB 与 JSON 一致
+- AI 助手提示词：
 ```
-Design ORM & Pydantic schemas; persist audit rows and write JSON snapshot per generation under storage/audit/{genId}. Capture timings and full prompt.
+Persist full prompt, params, timings, tokens; provide audit API and JSON export.
 ```
 
 ---
 
 ## v2.0 / v3.0 提示
-- 维持原有目录与任务占位，不在本版细化到可执行级。
-
-## 版本与分支策略（文档化）
-- 主分支：main；命名：feat/*、fix/*、chore/*、docs/*、refactor/*、release/*
-- 前端包管理：pnpm；后端依赖：Poetry
-
-## 环境与运行（文档化）
-- Node：.nvmrc = v20；Python：.python-version = 3.11
-- 环境变量：见 `.env.example`
+- 保持占位，待 v1.0 完成后再细化。
