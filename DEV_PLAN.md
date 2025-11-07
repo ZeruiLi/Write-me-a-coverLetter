@@ -195,13 +195,104 @@ i18n 策略
 
 ---
 
-## 前端最小对接（v1.0）
-- 结构：`frontend/src/{main.tsx, App.tsx, routes/{Library.tsx,Compose.tsx,Questions.tsx}, components/{A4Preview.tsx,UploadDropzone.tsx,StyleSelector.tsx,LanguageSwitch.tsx}, api/client.ts}`
-- 配置：`.env` `VITE_API_BASE_URL=http://localhost:8000`
-- 流程：
-  - Library：上传（POST /api/resumes）、列表（GET /api/resumes）
-  - Compose：参数面板（style/paragraphs/words/keywords/lang）→ 生成 letter（/api/generate/letter）→ 预览 HTML → 导出 PDF
-  - Questions：选择问题 → /api/generate/short → 显示文本
+## 前端规范（v1.0）
+
+技术栈与约束
+- React 18 + Vite + TypeScript；包管理：pnpm
+- UI：Tailwind CSS + Headless UI；主色 `#0EA5E9`；暗色模式可选
+- 状态管理：Zustand（轻量全局状态：所选 resume、JD 文本、生成参数、界面语言）
+- 国际化：i18next + react-i18next（zh/en），默认随系统，支持手动切换
+- 网络：axios；基地址 `VITE_API_BASE_URL`（默认 `http://localhost:8000`）
+
+目录结构（可执行级）
+```
+frontend/
+  index.html
+  vite.config.ts
+  tsconfig.json
+  tailwind.config.ts
+  postcss.config.js
+  .env.example              # VITE_API_BASE_URL
+  src/
+    main.tsx
+    App.tsx
+    styles/tailwind.css
+    api/client.ts           # axios 实例与拦截器（错误映射）
+    api/types.ts            # 与后端 Schemas 对齐的 TS 类型
+    store/index.ts          # zustand：resumeId、jd、params、lang 等
+    i18n/index.ts           # i18n 初始化 & 资源加载
+    i18n/locales/en/common.json
+    i18n/locales/zh/common.json
+    routes/Library.tsx      # 简历库：上传/列表/筛选
+    routes/Compose.tsx      # 组合：参数侧栏 + A4 预览
+    routes/Questions.tsx    # 短答问答
+    components/UploadDropzone.tsx
+    components/ResumeCard.tsx
+    components/TagFilter.tsx
+    components/StyleSelector.tsx
+    components/LanguageSwitch.tsx
+    components/A4Preview.tsx
+```
+
+类型与契约（api/types.ts，摘录）
+```
+export type ResumeOut = { id:number; fileName:string; tags:string[]; lang?:'zh'|'en'; createdAt:string };
+export type JobNormalized = { role?:string; responsibilities:string[]; requirements:string[]; keywords:string[]; language?:'zh'|'en' };
+export type GenerateShortRequest = { resumeId:number; job: JobNormalized|Record<string,unknown>; question:'why_company'|'why_you'|'biggest_achievement'; language:'auto'|'zh'|'en' };
+export type GenerateShortResponse = { genId:number; text:string };
+export type GenerateLetterRequest = { resumeId:number; job: JobNormalized|Record<string,unknown>; style:'Formal'|'Warm'|'Tech'; paragraphs_max:number; target_words:number; include_keywords:string[]; avoid_keywords:string[]; language:'auto'|'zh'|'en'; format:'html'|'md' };
+export type GenerateLetterResponse = { genId:number; format:'html'|'md'; content:string; meta:{ style:string; language:string; counts:Record<string,number>; notes?:string } };
+export type ExportPDFRequest = { genId?:number; html?:string; options?:Record<string,unknown> };
+```
+
+API 客户端（api/client.ts，函数清单）
+- listResumes(): GET /api/resumes → Promise<ResumeOut[]>
+- uploadResume(file:File, tags?:string[]): POST /api/resumes → {resumeId:number}
+- normalizeJob(text:string): POST /api/jobs/normalize → JobNormalized
+- generateShort(payload:GenerateShortRequest): POST /api/generate/short → GenerateShortResponse
+- generateLetter(payload:GenerateLetterRequest): POST /api/generate/letter → GenerateLetterResponse
+- exportPDF({genId?, html?}): POST /api/exports/letter/pdf → Blob（优先 genId；若后端未持久化 HTML 则使用 html 兜底）
+- getAudit(genId:number): GET /api/audit/{genId}
+注意：HTTP 错误码与提示映射
+- 400 参数错误 → toast("参数有误")
+- 404 不存在 → toast("资源不存在或已删除")
+- 413 文件过大 → toast("文件超过大小限制")
+- 415 类型不支持 → toast("不支持的文件类型")
+- 502 模型/渲染错误 → toast("服务繁忙或模型异常，请重试")
+
+UI 规范与流程
+- Library：
+  - 顶部上传（拖拽/点击），显示上传进度
+  - 列表（文件名/时间/标签/语言），支持搜索和标签过滤
+  - 选择一份简历后，跳转 Compose 并在全局 store 保存 resumeId
+- Compose：
+  - 左侧参数：style、paragraphs_max(1..7)、target_words(200..700)、include/avoid、language(auto/zh/en)
+  - 右侧 A4 预览：
+    - 生成 letter 后渲染 HTML；
+    - 打印样式：A4、边距 2cm、行距 1.35；字体回退与暗色兼容
+  - 导出 PDF：优先 genId；若失败则以当前预览 HTML 调用导出
+- Questions：
+  - 下拉选择问题枚举；
+  - 点击生成短答（展示字符统计，若>200 给出提示但不强制截断）
+
+样式与可访问性
+- Tailwind 配置主色 `#0EA5E9`，支持暗色 `media` 或 `class` 模式
+- A4Preview 提供打印专用类名（@media print）与屏幕预览边框/阴影
+- 组件交互（按钮/输入/切换）均提供 aria 属性与键盘可达性
+
+构建与运行
+- .env.example：`VITE_API_BASE_URL=http://localhost:8000`
+- 典型命令：
+  - `pnpm install`
+  - `pnpm dev`（本地开发，端口 5173，代理到后端可选）
+  - `pnpm build && pnpm preview`
+
+验收标准（v1.0 前端）
+- 能完成“上传 → 列表 → 选择 → 生成 letter → 预览 → 导出 PDF”的最短闭环
+- Questions 页面可生成 3 个预置问题之一的短答并展示
+- 错误码映射提示准确；加载/禁用/重试状态明确
+- i18n 切换后 UI 文案实时更新；默认随系统语言
+
 
 ---
 
@@ -263,6 +354,35 @@ Render HTML to PDF via Chromium; inject CSS variables; save under storage/export
 - AI 助手提示词：
 ```
 Persist full prompt, params, timings, tokens; provide audit API and JSON export.
+```
+
+---
+
+### TASK007 前端脚手架与基础视图
+- 版本号：v1.0
+- 状态：计划中
+- 子任务（可执行级）：
+  1) 脚手架：`pnpm create vite@latest frontend -- --template react-ts`；安装与配置 Tailwind/Headless UI（暗色+主色）
+  2) 目录与文件：按“前端规范（v1.0）”创建 `src/*`、`tailwind.config.ts`、`postcss.config.js`、`.env.example`
+  3) API 客户端与类型：`api/client.ts`、`api/types.ts`（对齐后端 Schemas）；封装错误映射
+  4) 路由与页面：`routes/Library.tsx`、`Compose.tsx`、`Questions.tsx`；顶部导航与 LanguageSwitch
+  5) 组件：UploadDropzone、ResumeCard、TagFilter、StyleSelector、A4Preview
+  6) Store：Zustand 保存 resumeId、jd、params、language；开启 localStorage 持久化
+  7) 集成流程：完成“上传→列表→生成 letter→预览→导出 PDF”闭环；Questions 生成短答
+  8) i18n：初始化 en/zh 文案；默认随系统语言；提供切换控件
+  9) 文档：在 `frontend/README.md` 补充运行说明与命令（dev/build/preview）
+- 依赖（前端）：react, react-dom, typescript, vite, axios, zustand, tailwindcss, postcss, autoprefixer, @headlessui/react, i18next, react-i18next
+- 验收清单：
+  - `pnpm dev` 可启动；各页面加载无报错
+  - 能与后端完成闭环（至少使用 html 方式导出 PDF）
+  - 错误码映射准确；i18n 切换生效
+- AI 助手可执行提示词：
+```
+Scaffold a React+Vite+TS app under frontend/ with Tailwind+Headless UI and Zustand.
+Add api/client.ts with axios (baseURL from VITE_API_BASE_URL) and error mapping for 400/404/413/415/502.
+Implement routes: Library (upload/list), Compose (params panel + A4 preview), Questions (short answers).
+Implement components: UploadDropzone, ResumeCard, TagFilter, StyleSelector, LanguageSwitch, A4Preview.
+Wire to backend endpoints described in DEV_PLAN; export PDF using html if genId-only export fails.
 ```
 
 ---
